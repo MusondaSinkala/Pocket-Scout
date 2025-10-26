@@ -3,9 +3,21 @@ import pandas as pd
 import os
 import json
 from datetime import datetime
-from source.heatmap_generator import generate_heatmap  # Import from source folder
+from source.heatmap_generator import generate_heatmap
+import math
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
+
+def clean_nan_values(obj):
+    """Recursively replace NaN values with None"""
+    if isinstance(obj, dict):
+        return {k: clean_nan_values(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_nan_values(v) for v in obj]
+    elif pd.isna(obj) or (isinstance(obj, float) and math.isnan(obj)):
+        return None
+    else:
+        return obj
 
 # Load data from data/ folder
 df = pd.read_csv('data/final_player_df.csv')
@@ -28,18 +40,49 @@ def get_player(player_id):
     if player_id not in df.index:
         return jsonify({'error': 'Player not found'}), 404
     
-    row = df.loc[player_id].drop('top_knn_ids').to_dict()
+    # Get row and convert to dict, handling potential DataFrame case
+    row_data = df.loc[player_id]
+    if isinstance(row_data, pd.DataFrame):
+        row_data = row_data.iloc[0]
+    
+    # Drop top_knn_ids if it exists and convert to dict
+    if 'top_knn_ids' in row_data:
+        row = row_data.drop('top_knn_ids').to_dict()
+    else:
+        row = row_data.to_dict()
+    
+    # Clean NaN values
+    row = clean_nan_values(row)
     
     # Generate heatmap on the fly using the density data
     if player_id in heatmap_dict:
-        player_name = row['full_name']
+        player_name = row.get('full_name', 'Unknown Player')
         density_features = heatmap_dict[player_id]
         row['density_plot_url'] = generate_heatmap(density_features, player_name)
     else:
         row['density_plot_url'] = None
     
-    row['contract_expiration_date'] = datetime.strptime(row['contract_expiration_date'], '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d')
-    row['market_value_in_eur'] = "€{:,.0f}".format(row['market_value_in_eur'])
+    # Handle date formatting safely
+    contract_date = row.get('contract_expiration_date')
+    if contract_date and contract_date != 'NaN':
+        try:
+            row['contract_expiration_date'] = datetime.strptime(
+                str(contract_date), '%Y-%m-%d %H:%M:%S'
+            ).strftime('%Y-%m-%d')
+        except:
+            row['contract_expiration_date'] = "Unknown"
+    else:
+        row['contract_expiration_date'] = "Unknown"
+    
+    # Format market value safely
+    market_value = row.get('market_value_in_eur')
+    if market_value and market_value != 'NaN':
+        try:
+            row['market_value_in_eur'] = "€{:,.0f}".format(float(market_value))
+        except:
+            row['market_value_in_eur'] = "Unknown"
+    else:
+        row['market_value_in_eur'] = "Unknown"
     
     return jsonify(row)
 
@@ -48,21 +91,33 @@ def get_similar(player_id):
     if player_id not in df.index:
         return jsonify({'error': 'Player not found'}), 404
 
-    top_ids = pd.unique(df.loc[player_id]['top_knn_ids'])
+    top_knn_ids_value = df.loc[player_id]['top_knn_ids']
+    
+    # Handle the top_knn_ids - it might be a string representation of a list
+    if isinstance(top_knn_ids_value, str):
+        try:
+            # Try to parse string as list
+            top_ids = eval(top_knn_ids_value)
+        except:
+            top_ids = []
+    elif hasattr(top_knn_ids_value, '__iter__') and not isinstance(top_knn_ids_value, str):
+        top_ids = list(top_knn_ids_value)
+    else:
+        top_ids = []
 
     players = []
     for sid in top_ids:
         if sid in df.index:
             row = df.loc[sid]
-            if isinstance(row, pd.DataFrame):  # If df.loc[sid] returns multiple rows, take the first one
+            if isinstance(row, pd.DataFrame):
                 row = row.iloc[0]
 
             players.append({
                 'id': int(sid),
-                'full_name': str(row['full_name']),
-                'club': str(row['club']),
-                'role': str(row['role']),
-                'image_url': str(row['image_url'])
+                'full_name': str(row.get('full_name', 'Unknown')),
+                'club': str(row.get('club', 'Unknown')),
+                'role': str(row.get('role', 'Unknown')),
+                'image_url': str(row.get('image_url', ''))
             })
 
     return jsonify({'similar_players': players})
