@@ -1,4 +1,6 @@
+flask
 pandas
 numpy
-flask
+matplotlib
 scikit-learn
+mplsoccer
