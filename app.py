@@ -88,38 +88,51 @@ def get_player(player_id):
 
 @app.route('/similar_players/<int:player_id>')
 def get_similar(player_id):
+    print(f"🔍 DEBUG: Getting similar players for player_id: {player_id}")
+    
     if player_id not in df.index:
         return jsonify({'error': 'Player not found'}), 404
 
     top_knn_ids_value = df.loc[player_id]['top_knn_ids']
+    print(f"🔍 DEBUG: top_knn_ids_value: {top_knn_ids_value}")
+    print(f"🔍 DEBUG: Type: {type(top_knn_ids_value)}")
     
-    # Handle the top_knn_ids - it might be a string representation of a list
+    # Handle the top_knn_ids
     if isinstance(top_knn_ids_value, str):
         try:
-            # Try to parse string as list
             top_ids = eval(top_knn_ids_value)
-        except:
+            print(f"🔍 DEBUG: Parsed from string: {top_ids}")
+        except Exception as e:
+            print(f"❌ Error parsing string: {e}")
             top_ids = []
     elif hasattr(top_knn_ids_value, '__iter__') and not isinstance(top_knn_ids_value, str):
         top_ids = list(top_knn_ids_value)
+        print(f"🔍 DEBUG: Converted iterable to list: {top_ids}")
     else:
+        print(f"❌ Unhandled type: {type(top_knn_ids_value)}")
         top_ids = []
 
+    print(f"🔍 DEBUG: Final top_ids: {top_ids}")
+    
     players = []
     for sid in top_ids:
-        if sid in df.index:
+        # Skip the player themselves and check if ID is valid
+        if sid != player_id and sid in df.index:
             row = df.loc[sid]
             if isinstance(row, pd.DataFrame):
                 row = row.iloc[0]
 
-            players.append({
+            player_data = {
                 'id': int(sid),
                 'full_name': str(row.get('full_name', 'Unknown')),
                 'club': str(row.get('club', 'Unknown')),
                 'role': str(row.get('role', 'Unknown')),
                 'image_url': str(row.get('image_url', ''))
-            })
+            }
+            players.append(player_data)
+            print(f"✅ Added similar player: {player_data['full_name']} (ID: {sid})")
 
+    print(f"🔍 DEBUG: Returning {len(players)} similar players")
     return jsonify({'similar_players': players})
 
 @app.route('/get_player_id', methods=['POST'])
@@ -131,3 +144,4 @@ def get_player_id():
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
