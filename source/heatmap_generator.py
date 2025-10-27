@@ -5,43 +5,65 @@ from mplsoccer import Pitch
 import numpy as np
 import io
 import base64
+from matplotlib.colors import LinearSegmentedColormap
 
-def generate_heatmap(density_data, player_name):
+def generate_heatmap(density_data, player_name, display_in_notebook = False):
     """
-    Generate a football pitch heatmap from density data and return as base64 encoded image
+    Generate a football pitch heatmap from density data using transposed orientation
     """
-    # Reshape the 100 values into 10x10 grid
-    heatmap_data = np.array(density_data).reshape(10, 10)
+    # Reshape and transpose the data
+    heatmap_data = np.array(density_data).reshape(10, 10).T
     
-    # Create a custom colormap (similar to your original)
-    custom_cmap = plt.cm.hot
+    # Create white-to-blue colormap
+    colors = ['white', 'lightblue', 'blue', 'darkblue']
+    cmap = LinearSegmentedColormap.from_list('white_to_blue', colors, N=256)
     
-    # Create pitch
-    pitch = Pitch(pitch_type='wyscout', corner_arcs=True)
+    # Create pitch with white background and black lines
+    from mplsoccer import Pitch
+    pitch = Pitch(
+        pitch_type='wyscout', 
+        corner_arcs=True, 
+        pitch_color='white',
+        line_color='black',
+        linewidth=1.5
+    )
     fig, ax = pitch.draw(figsize=(10, 6))
     
-    # Create coordinates for the 10x10 grid
-    # We need to convert our 10x10 grid to pitch coordinates (0-100 to 0-100)
+    # Set figure background to white
+    fig.patch.set_facecolor('white')
+    
+    # Create coordinates and plot heatmap
     x_coords = np.linspace(0, 100, 10)
     y_coords = np.linspace(0, 100, 10)
-    
-    # Create meshgrid for the heatmap
     X, Y = np.meshgrid(x_coords, y_coords)
     
-    # Plot the heatmap
-    heatmap = ax.contourf(X, Y, heatmap_data, levels=100, cmap=custom_cmap, alpha=0.7)
+    ax.contourf(X, Y, heatmap_data, levels=100, cmap=cmap, alpha=0.5)
     
-    # Add colorbar
-    plt.colorbar(heatmap, ax=ax, label='Activity Density')
+    # Display in notebook if requested
+    if display_in_notebook:
+        plt.show()
     
-    # Add title
-    ax.set_title(f'Heatmap: {player_name}', fontsize=14, fontweight='bold')
-    
-    # Convert to base64 for web display
+    # Convert to base64 with white background
     buffer = io.BytesIO()
-    plt.savefig(buffer, format='png', bbox_inches='tight', dpi=100, transparent=True)
+    plt.savefig(
+        buffer, 
+        format='png', 
+        bbox_inches='tight', 
+        dpi=100, 
+        facecolor='white',
+        edgecolor='none',
+        transparent=False
+    )
     buffer.seek(0)
     image_base64 = base64.b64encode(buffer.getvalue()).decode()
     plt.close(fig)
     
-    return f"data:image/png;base64,{image_base64}"
+    image_url = f"data:image/png;base64,{image_base64}"
+    
+    # Also display as HTML in notebook if requested
+    if display_in_notebook:
+        from IPython.display import HTML, display
+        html_code = f'<img src="{image_url}" alt="Heatmap" style="max-width: 600px; border: 1px solid #ccc; background: white;">'
+        display(HTML(html_code))
+    
+    return image_url
