@@ -272,17 +272,31 @@ function loadPlayerData(playerId) {
 
             if (isFirstLoad) {
                 fetch(`/similar_players/${playerId}`)
-                    .then(response => response.json())
-                    .then(similarData => {
-                        const similarDiv = document.getElementById("similarPlayersList");
+                .then(response => response.json())
+                .then(similarData => {
+                    console.log("🔍 Similar players data:", similarData);
+                    
+                    const similarDiv = document.getElementById("similarPlayersList");
+                    if (similarData.similar_players && similarData.similar_players.length > 0) {
                         similarDiv.innerHTML = similarData.similar_players.map(player => `
-                            <div style="margin-bottom: 10px;">
-                                <img src="${player.image_url}" alt="${player.full_name}" style="width:50px; height:50px; object-fit:cover; border-radius:4px; margin-right:10px;">
-                                <strong>${player.full_name}</strong><br>
-                                <small>${player.club}</small>
+                            <div style="margin-bottom: 10px; display: flex; align-items: center;">
+                                <img src="${player.image_url || '{{ url_for('static', filename='images/Unknown.jpg') }}'}" 
+                                     alt="${player.full_name}" 
+                                     style="width:50px; height:50px; object-fit:cover; border-radius:4px; margin-right:10px;">
+                                <div>
+                                    <strong>${player.full_name}</strong><br>
+                                    <small>${player.club} • ${player.role}</small>
+                                </div>
                             </div>
                         `).join("");
-                    });
+                    } else {
+                        similarDiv.innerHTML = "<em>No similar players found</em>";
+                    }
+                })
+                .catch(error => {
+                    console.error("❌ Error fetching similar players:", error);
+                    similarDiv.innerHTML = "<em>Error loading similar players</em>";
+                });
             }
         });
 }
