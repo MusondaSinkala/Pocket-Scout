@@ -101,12 +101,16 @@ def get_similar(player_id):
     if isinstance(top_knn_ids_value, str) and top_knn_ids_value.strip():
         print(f"🔍 DEBUG: Processing as string")
         try:
-            # Convert numpy-style string to Python list format
-            python_list_string = top_knn_ids_value.strip().replace(' ', ', ')
-            print(f"🔍 DEBUG: Converted to Python format: {python_list_string}")
+            # Better cleaning: remove brackets, split by spaces, filter out empty strings
+            cleaned = top_knn_ids_value.strip('[] ')  # Remove brackets and spaces
+            print(f"🔍 DEBUG: After removing brackets: {cleaned}")
             
-            # Now eval should work
-            top_ids = eval(python_list_string)
+            # Split and filter
+            number_strings = [s for s in cleaned.split() if s.strip()]
+            print(f"🔍 DEBUG: Number strings: {number_strings}")
+            
+            # Convert to integers
+            top_ids = [int(num) for num in number_strings]
             print(f"🔍 DEBUG: Parsed IDs: {top_ids}")
             
         except Exception as e:
@@ -151,5 +155,6 @@ def get_player_id():
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
