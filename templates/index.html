@@ -10,6 +10,7 @@
         }
         .search-bar {
             margin-bottom: 20px;
+            position: relative;
         }
         #comparison-container {
             display: flex;
@@ -113,12 +114,41 @@
             transform: translateY(-1px);
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+        .autocomplete-suggestions {
+            border: 1px solid #ccc;
+            border-top: none;
+            background-color: #fff;
+            position: absolute;
+            z-index: 1000;
+            width: 100%;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .autocomplete-suggestion {
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.2s;
+        }
+        .autocomplete-suggestion:hover {
+            background-color: #f8f9fa;
+        }
+        .autocomplete-suggestion:last-child {
+            border-bottom: none;
+        }
+        .autocomplete-suggestion.highlighted {
+            background-color: #007bff;
+            color: white;
+        }
     </style>
 </head>
 <body>
 
 <div class="search-bar">
     <input type="text" id="playerSearch" placeholder="Search for a player..." style="width: 100%; padding: 10px;">
+    <div id="autocompleteSuggestions" class="autocomplete-suggestions"></div>
 </div>
 
 <div id="comparison-container">
@@ -156,6 +186,9 @@
 
 <script>
 let loadCount = 0;
+let allPlayerNames = {{ player_names | tojson }}; // Get player names from Flask
+let currentSuggestions = [];
+let highlightedIndex = -1;
 
 function clearPanel(panelId) {
     const panel = document.getElementById(panelId);
@@ -352,64 +385,135 @@ function loadSimilarPlayer(playerId) {
     }
 }
 
+// Autocomplete functions
+function showAutocompleteSuggestions(query) {
+    const suggestionsDiv = document.getElementById('autocompleteSuggestions');
+    
+    if (!query || query.length < 2) {
+        suggestionsDiv.style.display = 'none';
+        currentSuggestions = [];
+        return;
+    }
+    
+    // Filter player names that match the query (case insensitive)
+    const filteredNames = allPlayerNames.filter(name => 
+        name.toLowerCase().includes(query.toLowerCase())
+    ).slice(0, 10); // Limit to 10 suggestions
+    
+    if (filteredNames.length === 0) {
+        suggestionsDiv.style.display = 'none';
+        currentSuggestions = [];
+        return;
+    }
+    
+    currentSuggestions = filteredNames;
+    highlightedIndex = -1;
+    
+    // Create suggestion HTML
+    suggestionsDiv.innerHTML = filteredNames.map((name, index) => `
+        <div class="autocomplete-suggestion" data-index="${index}" onclick="selectSuggestion('${name}')">
+            ${highlightMatch(name, query)}
+        </div>
+    `).join('');
+    
+    suggestionsDiv.style.display = 'block';
+}
+
+function highlightMatch(text, query) {
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    const matchIndex = lowerText.indexOf(lowerQuery);
+    
+    if (matchIndex === -1) return text;
+    
+    const before = text.substring(0, matchIndex);
+    const match = text.substring(matchIndex, matchIndex + query.length);
+    const after = text.substring(matchIndex + query.length);
+    
+    return `${before}<strong>${match}</strong>${after}`;
+}
+
+function selectSuggestion(playerName) {
+    document.getElementById('playerSearch').value = playerName;
+    document.getElementById('autocompleteSuggestions').style.display = 'none';
+    
+    // Get player ID and load the player
+    fetch(`/get_player_id`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name: playerName })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.player_id) {
+            loadPlayerData(data.player_id);
+        }
+    });
+}
+
+function handleKeydown(event) {
+    const suggestionsDiv = document.getElementById('autocompleteSuggestions');
+    
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (highlightedIndex < currentSuggestions.length - 1) {
+            highlightedIndex++;
+            updateHighlightedSuggestion();
+        }
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (highlightedIndex > 0) {
+            highlightedIndex--;
+            updateHighlightedSuggestion();
+        }
+    } else if (event.key === 'Enter') {
+        event.preventDefault();
+        if (highlightedIndex >= 0 && currentSuggestions[highlightedIndex]) {
+            selectSuggestion(currentSuggestions[highlightedIndex]);
+        }
+    } else if (event.key === 'Escape') {
+        suggestionsDiv.style.display = 'none';
+        highlightedIndex = -1;
+    }
+}
+
+function updateHighlightedSuggestion() {
+    const suggestions = document.querySelectorAll('.autocomplete-suggestion');
+    suggestions.forEach((suggestion, index) => {
+        if (index === highlightedIndex) {
+            suggestion.classList.add('highlighted');
+        } else {
+            suggestion.classList.remove('highlighted');
+        }
+    });
+}
+
 document.addEventListener("DOMContentLoaded", function () {
     const searchInput = document.getElementById("playerSearch");
-    const suggestionBox = document.createElement("div");
-    suggestionBox.style.border = "1px solid #ccc";
-    suggestionBox.style.backgroundColor = "#fff";
-    suggestionBox.style.position = "absolute";
-    suggestionBox.style.zIndex = 1000;
-    suggestionBox.style.width = "100%";
-    suggestionBox.style.maxHeight = "200px";
-    suggestionBox.style.overflowY = "auto";
-    suggestionBox.style.display = "none";
-    searchInput.parentNode.appendChild(suggestionBox);
-
-    let timeout;
-
-    searchInput.addEventListener("input", function () {
-        const query = this.value.trim();
-
-        clearTimeout(timeout);
-        if (query.length < 2) {
-            suggestionBox.style.display = "none";
-            return;
-        }
-
-        timeout = setTimeout(() => {
-            fetch(`/get_player_id`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ name: query })
-            })
-                .then(response => response.json())
-                .then(data => {
-                    suggestionBox.innerHTML = "";
-                    if (data.player_id) {
-                        const div = document.createElement("div");
-                        div.textContent = query;
-                        div.style.padding = "8px";
-                        div.style.cursor = "pointer";
-                        div.addEventListener("click", () => {
-                            searchInput.value = query;
-                            suggestionBox.style.display = "none";
-                            loadPlayerData(data.player_id);
-                        });
-                        suggestionBox.appendChild(div);
-                        suggestionBox.style.display = "block";
-                    } else {
-                        suggestionBox.style.display = "none";
-                    }
-                });
-        }, 200);
+    const suggestionsDiv = document.getElementById("autocompleteSuggestions");
+    
+    // Add event listeners for autocomplete
+    searchInput.addEventListener("input", function() {
+        showAutocompleteSuggestions(this.value);
     });
-
+    
+    searchInput.addEventListener("keydown", handleKeydown);
+    
+    // Hide suggestions when clicking outside
     document.addEventListener("click", function (e) {
-        if (!suggestionBox.contains(e.target) && e.target !== searchInput) {
-            suggestionBox.style.display = "none";
+        if (!searchInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+            suggestionsDiv.style.display = 'none';
+            highlightedIndex = -1;
         }
+    });
+    
+    // Hide suggestions when search input loses focus
+    searchInput.addEventListener("blur", function() {
+        setTimeout(() => {
+            suggestionsDiv.style.display = 'none';
+        }, 200);
     });
 });
 </script>
