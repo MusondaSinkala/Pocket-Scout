@@ -98,10 +98,17 @@ def get_similar(player_id):
     print(f"🔍 DEBUG: Type: {type(top_knn_ids_value)}")
     
     # Handle the top_knn_ids
-    if isinstance(top_knn_ids_value, str):
+    if isinstance(top_knn_ids_value, str) and top_knn_ids_value.strip():
+        print(f"🔍 DEBUG: Processing as string")
         try:
-            top_ids = eval(top_knn_ids_value)
-            print(f"🔍 DEBUG: Parsed from string: {top_ids}")
+            # Convert numpy-style string to Python list format
+            python_list_string = top_knn_ids_value.strip().replace(' ', ', ')
+            print(f"🔍 DEBUG: Converted to Python format: {python_list_string}")
+            
+            # Now eval should work
+            top_ids = eval(python_list_string)
+            print(f"🔍 DEBUG: Parsed IDs: {top_ids}")
+            
         except Exception as e:
             print(f"❌ Error parsing string: {e}")
             top_ids = []
@@ -109,7 +116,7 @@ def get_similar(player_id):
         top_ids = list(top_knn_ids_value)
         print(f"🔍 DEBUG: Converted iterable to list: {top_ids}")
     else:
-        print(f"❌ Unhandled type: {type(top_knn_ids_value)}")
+        print(f"❌ Unhandled type or empty: {type(top_knn_ids_value)}")
         top_ids = []
 
     print(f"🔍 DEBUG: Final top_ids: {top_ids}")
@@ -144,4 +151,5 @@ def get_player_id():
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
