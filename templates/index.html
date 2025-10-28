@@ -5,9 +5,9 @@
     <title>Pocket Scout - Football Player Analytics</title>
     <style>
         :root {
-            --primary-color: #01136b;
-            --secondary-color: #414c5c;
-            --accent-color: #dadee3;
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --accent-color: #f1f5f9;
             --text-color: #1e293b;
             --border-color: #e2e8f0;
             --hover-color: #3b82f6;
@@ -97,8 +97,6 @@
             padding: 24px;
             position: sticky;
             top: 20px;
-            max-height: 80vh;
-            overflow-y: auto;
         }
 
         .similar-players-panel h3 {
@@ -177,6 +175,17 @@
             font-weight: 700;
             color: var(--primary-color);
             margin-bottom: 8px;
+        }
+
+        .player-role {
+            display: inline-block;
+            background: var(--accent-color);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 12px;
         }
 
         .player-details {
@@ -355,7 +364,6 @@
             
             .similar-players-panel {
                 position: static;
-                max-height: none;
             }
         }
 
@@ -367,10 +375,6 @@
             
             .player-details {
                 grid-template-columns: 1fr;
-            }
-            
-            .header h1 {
-                font-size: 2rem;
             }
         }
     </style>
@@ -407,6 +411,7 @@
                         <img src="{{ url_for('static', filename='images/Unknown.jpg') }}" alt="Player Image" class="player-image">
                         <div class="player-basic-info">
                             <div class="player-name">Player 1</div>
+                            <div class="player-role">Search for a player</div>
                             <div class="player-details" id="playerInfo1">
                                 <p>Search for a player to load data</p>
                             </div>
@@ -434,6 +439,7 @@
                         <img src="{{ url_for('static', filename='images/Unknown.jpg') }}" alt="Player Image" class="player-image">
                         <div class="player-basic-info">
                             <div class="player-name">Player 2</div>
+                            <div class="player-role">Click similar players to compare</div>
                             <div class="player-details" id="playerInfo2">
                                 <p>Click similar players to compare</p>
                             </div>
@@ -463,94 +469,185 @@
         let allPlayerNames = {{ player_names | tojson }};
         let currentSuggestions = [];
         let highlightedIndex = -1;
-        let selectedSimilarPlayerId = null;
 
         function clearPanel(panelId) {
             const panel = document.getElementById(panelId);
-            const infoDiv = panel.querySelector('.player-details');
-            const nameDiv = panel.querySelector('.player-name');
-            const statsTable = panel.querySelector('.stats-table');
-            const image = panel.querySelector('.player-image');
-            const density = panel.querySelector('.density-plot');
-
-            // Reset to empty state
-            nameDiv.textContent = panelId === 'playerPanel1' ? 'Player 1' : 'Player 2';
-            infoDiv.innerHTML = panelId === 'playerPanel1' ? 
-                '<p>Search for a player to load data</p>' : 
-                '<p>Click similar players to compare</p>';
-            statsTable.innerHTML = '<tr><td colspan="2" style="text-align: center; color: var(--secondary-color);">No data loaded</td></tr>';
-            image.src = "{{ url_for('static', filename='images/Unknown.jpg') }}";
-            density.innerHTML = '<div class="empty-state"><div>📊</div><p>Heatmap will appear here</p></div>';
+            panel.querySelector('.mini-info').innerHTML = "";
+            panel.querySelector('.stats-table').innerHTML = "";
+            panel.querySelector('.player-image').src = "{{ url_for('static', filename='images/Unknown.jpg') }}";
+            panel.querySelector('.density-plot').innerText = "Kernel Density Plot Placeholder";
 
             if (panelId === 'playerPanel1') {
-                document.getElementById('similarPlayersList').innerHTML = 
-                    '<div class="empty-state"><div>🔍</div><p>Search for a player to see similar talents</p></div>';
+                document.getElementById('similarPlayersList').innerText = "Load a player in the second panel to see suggestions...";
                 loadCount = 0;
-                selectedSimilarPlayerId = null;
             } else if (panelId === 'playerPanel2') {
                 loadCount = 1;
                 
-                // Reset similar player highlights
-                document.querySelectorAll('.similar-player-item').forEach(item => {
-                    item.classList.remove('selected');
+                const similarItems = document.querySelectorAll('.similar-player-item');
+                similarItems.forEach(item => {
+                    item.style.background = 'white';
+                    item.style.borderColor = '#ddd';
                 });
             }
+        }
+
+        function getPositionSpecificStats(data) {
+            const position = data.position;
+            const role = data.role;
+            const stats = {};
+
+            // Common base stats
+            stats["Appearances"] = data.matches_played;
+
+            if (position === 'DF') {
+                if (role === 'RB' || role === 'LB') {
+                    // Full-back stats
+                    Object.assign(stats, {
+                        "Pass Accuracy": data.pass_accuracy,
+                        "Key Passes": data.key_passes,
+                        "Assists": data.assists,
+                        "Successful Runs": data.perc_successful_runs_with_ball,
+                        "Crosses": data.crosses,
+                        "Loose Balls Won": data.perc_loose_balls_won,
+                        "Sliding Tackles": data.sliding_tackles,
+                        "Blocks": data.blocks,
+                        "Possession Regained": data.possession_regained,
+                        "Own Goals": data.own_goals
+                    });
+                } else {
+                    // Central defender stats
+                    Object.assign(stats, {
+                        "Aerial Duels Won": data.perc_aerial_duels_won,
+                        "Defensive Duels Won": data.ground_defensive_duels_won,
+                        "Loose Balls Won": data.perc_loose_balls_won,
+                        "Sliding Tackles": data.sliding_tackles,
+                        "Interceptions": data.interceptions,
+                        "Clearances": data.clearances,
+                        "Blocks": data.blocks,
+                        "Possession Regained": data.possession_regained,
+                        "Own Goals": data.own_goals
+                    });
+                }
+            } else if (position === 'FW') {
+                // Forward stats
+                Object.assign(stats, {
+                    "Total Shots": data.total_shots,
+                    "Shot Accuracy": data.shot_accuracy,
+                    "Goals": data.goals,
+                    "Shot Conversion": data.shot_conversion || 'N/A',
+                    "Penalty Conversion": data.penalty_conversion,
+                    "Total Passes": data.total_passes,
+                    "Accurate Passes": data.accurate_passes,
+                    "Pass Accuracy": data.pass_accuracy,
+                    "Key Passes": data.key_passes,
+                    "Assists": data.assists,
+                    "Run Attempts": data.run_attempts_with_ball,
+                    "Successful Runs": data.successful_runs_with_ball,
+                    "Successful Run %": data.perc_successful_runs_with_ball,
+                    "Crosses": data.crosses,
+                    "Dribbles": data.dribbles,
+                    "Free Kick Shots": data.free_kick_shots,
+                    "Free Kick Crosses": data.free_kick_crosses
+                });
+            } else if (position === 'MD') {
+                if (role === 'DM') {
+                    // Defensive midfielder stats
+                    Object.assign(stats, {
+                        "Total Passes": data.total_passes,
+                        "Pass Accuracy": data.pass_accuracy,
+                        "Key Passes": data.key_passes,
+                        "Assists": data.assists,
+                        "Successful Run %": data.perc_successful_runs_with_ball,
+                        "Defensive Duels Won": data.ground_defensive_duels_won,
+                        "Loose Balls Won": data.perc_loose_balls_won,
+                        "Sliding Tackles": data.sliding_tackles,
+                        "Interceptions": data.interceptions,
+                        "Clearances": data.clearances,
+                        "Blocks": data.blocks,
+                        "Possession Regained": data.possession_regained
+                    });
+                } else {
+                    // Attacking midfielder stats
+                    Object.assign(stats, {
+                        "Total Shots": data.total_shots,
+                        "Shot Accuracy": data.shot_accuracy,
+                        "Goals": data.goals,
+                        "Shot Conversion": data.shot_conversion || 'N/A',
+                        "Penalty Conversion": data.penalty_conversion,
+                        "Total Passes": data.total_passes,
+                        "Accurate Passes": data.accurate_passes,
+                        "Pass Accuracy": data.pass_accuracy,
+                        "Key Passes": data.key_passes,
+                        "Assists": data.assists,
+                        "Run Attempts": data.run_attempts_with_ball,
+                        "Successful Runs": data.successful_runs_with_ball,
+                        "Successful Run %": data.perc_successful_runs_with_ball,
+                        "Crosses": data.crosses,
+                        "Dribbles": data.dribbles,
+                        "Free Kick Shots": data.free_kick_shots,
+                        "Free Kick Crosses": data.free_kick_crosses
+                    });
+                }
+            } else if (position === 'GK') {
+                // Goalkeeper stats
+                Object.assign(stats, {
+                    "Balls Attacked": data.gk_balls_attacked,
+                    "Save Attempts": data.gk_save_attempts,
+                    "Successful Saves": data.gk_successful_save_attempts,
+                    "Save Success %": data.perc_gk_save_success
+                });
+            }
+
+            return stats;
         }
 
         function loadPlayerData(playerId) {
             const isFirstLoad = loadCount === 0;
             const panelId = isFirstLoad ? "playerPanel1" : "playerPanel2";
+            const panelNum = isFirstLoad ? "1" : "2";
             const panel = document.getElementById(panelId);
-            const infoDiv = panel.querySelector(".player-details");
-            const nameDiv = panel.querySelector(".player-name");
-            const statsTable = panel.querySelector(".stats-table");
+            const info = panel.querySelector(".player-details");
+            const statsTable = document.getElementById("statsTable" + panelNum);
             const image = panel.querySelector(".player-image");
-            const density = panel.querySelector(".density-plot");
+            const density = document.getElementById("densityPlot" + panelNum);
+            const playerName = panel.querySelector(".player-name");
+            const playerRole = panel.querySelector(".player-role");
 
             loadCount++;
 
             fetch(`/player/${playerId}`)
                 .then(response => response.json())
                 .then(data => {
-                    // Update basic info
-                    nameDiv.textContent = data.full_name;
                     image.src = data.image_url || "{{ url_for('static', filename='images/Unknown.jpg') }}";
+                    playerName.textContent = data.full_name || 'Unknown Player';
+                    playerRole.textContent = `${data.position || 'N/A'} • ${data.role || 'N/A'}`;
                     
-                    // Update detailed info
-                    infoDiv.innerHTML = `
-                        <p><strong>Age:</strong> ${data.age}</p>
-                        <p><strong>Height:</strong> ${data.height}cm</p>
-                        <p><strong>Position:</strong> ${data.position}</p>
-                        <p><strong>Role:</strong> ${data.role}</p>
-                        <p><strong>Club:</strong> ${data.club}</p>
-                        <p><strong>Value:</strong> ${data.market_value_in_eur || 'Unknown'}</p>
-                        <p><strong>Nationality:</strong> ${data.national_team || 'N/A'}</p>
-                        <p><strong>Contract:</strong> ${data.contract_expiration_date}</p>
+                    info.innerHTML = `
+                        <p><strong>Age:</strong> ${data.age || 'N/A'}</p>
+                        <p><strong>Height:</strong> ${data.height || 'N/A'}cm</p>
+                        <p><strong>Weight:</strong> ${data.weight || 'N/A'}kgs</p>
+                        <p><strong>Foot:</strong> ${data.foot || 'N/A'}</p>
+                        <p><strong>Club:</strong> ${data.club || 'N/A'}</p>
+                        <p><strong>Contract Expiry:</strong> ${data.contract_expiration_date || 'N/A'}</p>
+                        <p><strong>Market Value:</strong> ${data.market_value_in_eur || 'N/A'}</p>
+                        <p><strong>National Team:</strong> ${data.national_team || 'N/A'}</p>
                     `;
 
-                    // Create stats table
-                    const stats = {
-                        "Appearances": data.matches_played || 'N/A',
-                        "Goals": data.goals || 'N/A',
-                        "Assists": data.assists || 'N/A',
-                        "Pass Accuracy": data.pass_accuracy || 'N/A',
-                        "Total Shots": data.total_shots || 'N/A',
-                        "Shot Accuracy": data.shot_accuracy || 'N/A'
-                    };
+                    // Get position-specific stats
+                    const stats = getPositionSpecificStats(data);
 
+                    // Create stats table
                     statsTable.innerHTML = `
                         <tr><th>Metric</th><th>Value</th></tr>
                         ${Object.entries(stats).map(([key, value]) => 
-                            `<tr><td>${key}</td><td>${value}</td></tr>`
+                            `<tr><td>${key}</td><td>${value !== null && value !== undefined ? value : 'N/A'}</td></tr>`
                         ).join('')}
                     `;
 
-                    // Update heatmap
-                    if (data.density_plot_url) {
-                        density.innerHTML = `<img src="${data.density_plot_url}" alt="Density Plot" style="width:100%; height:100%; object-fit: contain;">`;
-                    }
+                    density.innerHTML = data.density_plot_url ? 
+                        `<img src="${data.density_plot_url}" alt="Density Plot" style="width:100%; height:100%;">` :
+                        '<div class="empty-state"><div>📊</div><p>No heatmap available</p></div>';
 
-                    // Load similar players for the first panel
                     if (isFirstLoad) {
                         fetch(`/similar_players/${playerId}`)
                             .then(response => response.json())
@@ -569,45 +666,46 @@
                                                 </div>
                                             </div>
                                         </div>
-                                    `).join('');
+                                    `).join("");
                                 } else {
-                                    similarDiv.innerHTML = '<div class="empty-state"><div>😕</div><p>No similar players found</p></div>';
+                                    similarDiv.innerHTML = "<div class='empty-state'><div>🔍</div><p>No similar players found</p></div>";
                                 }
                             })
                             .catch(error => {
-                                console.error("Error fetching similar players:", error);
-                                document.getElementById("similarPlayersList").innerHTML = '<div class="empty-state"><div>⚠️</div><p>Error loading similar players</p></div>';
+                                console.error("❌ Error fetching similar players:", error);
+                                similarDiv.innerHTML = "<div class='empty-state'><div>⚠️</div><p>Error loading similar players</p></div>";
                             });
                     }
                 })
                 .catch(error => {
-                    console.error("Error loading player data:", error);
+                    console.error("❌ Error loading player data:", error);
                     alert("Error loading player data. Please try again.");
                 });
         }
 
         function loadSimilarPlayer(playerId) {
-            console.log(`Loading similar player: ${playerId}`);
-            
-            // Set loadCount to load in second panel
             loadCount = 1;
-            
-            // Update visual selection
-            document.querySelectorAll('.similar-player-item').forEach(item => {
-                item.classList.remove('selected');
-            });
-            
-            // Highlight the clicked item
-            const clickedItem = document.querySelector(`.similar-player-item[data-player-id="${playerId}"]`);
-            if (clickedItem) {
-                clickedItem.classList.add('selected');
-            }
-            
-            selectedSimilarPlayerId = playerId;
-            
-            // Load the player data
             loadPlayerData(playerId);
+            
+            const similarItems = document.querySelectorAll('.similar-player-item');
+            similarItems.forEach(item => {
+                item.classList.remove('selected');
+                if (parseInt(item.getAttribute('data-player-id')) === playerId) {
+                    item.classList.add('selected');
+                }
+            });
         }
+
+        // Event delegation for similar player clicks
+        document.addEventListener('click', function(e) {
+            const similarPlayerItem = e.target.closest('.similar-player-item');
+            if (similarPlayerItem) {
+                const playerId = similarPlayerItem.getAttribute('data-player-id');
+                if (playerId) {
+                    loadSimilarPlayer(parseInt(playerId));
+                }
+            }
+        });
 
         // Autocomplete functions
         function showAutocompleteSuggestions(query) {
@@ -619,10 +717,9 @@
                 return;
             }
             
-            // Filter player names that match the query (case insensitive)
             const filteredNames = allPlayerNames.filter(name => 
                 name.toLowerCase().includes(query.toLowerCase())
-            ).slice(0, 8); // Limit to 8 suggestions
+            ).slice(0, 10);
             
             if (filteredNames.length === 0) {
                 suggestionsDiv.style.display = 'none';
@@ -633,36 +730,19 @@
             currentSuggestions = filteredNames;
             highlightedIndex = -1;
             
-            // Create suggestion HTML
             suggestionsDiv.innerHTML = filteredNames.map((name, index) => `
-                <div class="autocomplete-suggestion" data-index="${index}">
-                    ${highlightMatch(name, query)}
+                <div class="autocomplete-suggestion" data-index="${index}" onclick="selectSuggestion('${name.replace(/'/g, "\\'")}')">
+                    ${name}
                 </div>
             `).join('');
             
             suggestionsDiv.style.display = 'block';
         }
 
-        function highlightMatch(text, query) {
-            const lowerText = text.toLowerCase();
-            const lowerQuery = query.toLowerCase();
-            const matchIndex = lowerText.indexOf(lowerQuery);
-            
-            if (matchIndex === -1) return text;
-            
-            const before = text.substring(0, matchIndex);
-            const match = text.substring(matchIndex, matchIndex + query.length);
-            const after = text.substring(matchIndex + query.length);
-            
-            return `${before}<strong>${match}</strong>${after}`;
-        }
-
         function selectSuggestion(playerName) {
             document.getElementById('playerSearch').value = playerName;
             document.getElementById('autocompleteSuggestions').style.display = 'none';
-            highlightedIndex = -1;
             
-            // Get player ID and load the player
             fetch(`/get_player_id`, {
                 method: 'POST',
                 headers: {
@@ -719,37 +799,23 @@
             const searchInput = document.getElementById("playerSearch");
             const suggestionsDiv = document.getElementById("autocompleteSuggestions");
             
-            // Add event listeners for autocomplete
             searchInput.addEventListener("input", function() {
                 showAutocompleteSuggestions(this.value);
             });
             
             searchInput.addEventListener("keydown", handleKeydown);
             
-            // Click handler for autocomplete suggestions
-            suggestionsDiv.addEventListener("click", function(e) {
-                const suggestion = e.target.closest('.autocomplete-suggestion');
-                if (suggestion) {
-                    const index = parseInt(suggestion.getAttribute('data-index'));
-                    selectSuggestion(currentSuggestions[index]);
-                }
-            });
-            
-            // Click handler for similar players (event delegation)
-            document.getElementById('similarPlayersList').addEventListener('click', function(e) {
-                const similarItem = e.target.closest('.similar-player-item');
-                if (similarItem) {
-                    const playerId = parseInt(similarItem.getAttribute('data-player-id'));
-                    loadSimilarPlayer(playerId);
-                }
-            });
-            
-            // Hide suggestions when clicking outside
             document.addEventListener("click", function (e) {
                 if (!searchInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
                     suggestionsDiv.style.display = 'none';
                     highlightedIndex = -1;
                 }
+            });
+            
+            searchInput.addEventListener("blur", function() {
+                setTimeout(() => {
+                    suggestionsDiv.style.display = 'none';
+                }, 200);
             });
         });
     </script>
