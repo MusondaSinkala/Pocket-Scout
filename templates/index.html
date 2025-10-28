@@ -141,14 +141,17 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
+            font-size: 18px;
+            font-weight: bold;
             transition: all 0.3s ease;
-            opacity: 0.7;
+            opacity: 0.8;
+            z-index: 10;
         }
 
         .remove-btn:hover {
             opacity: 1;
             transform: scale(1.1);
+            background: #dc2626;
         }
 
         .player-header {
@@ -406,9 +409,9 @@
 
             <div class="players-comparison">
                 <div class="player-panel" id="playerPanel1">
-                    <button class="remove-btn" onclick="clearPanel('playerPanel1')">×</button>
+                    <button class="remove-btn" onclick="clearPanel('playerPanel1')">&times;</button>
                     <div class="player-header">
-                        <img src="{{ url_for('static', filename='images/Unknown.jpg') }}" alt="Player Image" class="player-image">
+                        <img src="https://via.placeholder.com/120x120?text=Player+1" alt="Player Image" class="player-image">
                         <div class="player-basic-info">
                             <div class="player-name">Player 1</div>
                             <div class="player-role">Search for a player</div>
@@ -434,9 +437,9 @@
                 </div>
 
                 <div class="player-panel" id="playerPanel2">
-                    <button class="remove-btn" onclick="clearPanel('playerPanel2')">×</button>
+                    <button class="remove-btn" onclick="clearPanel('playerPanel2')">&times;</button>
                     <div class="player-header">
-                        <img src="{{ url_for('static', filename='images/Unknown.jpg') }}" alt="Player Image" class="player-image">
+                        <img src="https://via.placeholder.com/120x120?text=Player+2" alt="Player Image" class="player-image">
                         <div class="player-basic-info">
                             <div class="player-name">Player 2</div>
                             <div class="player-role">Click similar players to compare</div>
@@ -466,27 +469,59 @@
 
     <script>
         let loadCount = 0;
-        let allPlayerNames = {{ player_names | tojson }};
+        let allPlayerNames = [
+            "Lionel Messi", "Cristiano Ronaldo", "Kylian Mbappé", 
+            "Kevin De Bruyne", "Erling Haaland", "Virgil van Dijk",
+            "Robert Lewandowski", "Neymar Jr", "Mohamed Salah",
+            "Karim Benzema", "Luka Modrić", "Harry Kane"
+        ];
         let currentSuggestions = [];
         let highlightedIndex = -1;
 
         function clearPanel(panelId) {
             const panel = document.getElementById(panelId);
-            panel.querySelector('.mini-info').innerHTML = "";
-            panel.querySelector('.stats-table').innerHTML = "";
-            panel.querySelector('.player-image').src = "{{ url_for('static', filename='images/Unknown.jpg') }}";
-            panel.querySelector('.density-plot').innerText = "Kernel Density Plot Placeholder";
+            const playerName = panel.querySelector('.player-name');
+            const playerRole = panel.querySelector('.player-role');
+            const playerDetails = panel.querySelector('.player-details');
+            const statsTable = panel.querySelector('.stats-table');
+            const playerImage = panel.querySelector('.player-image');
+            const densityPlot = panel.querySelector('.density-plot');
 
+            // Reset all content
+            playerName.textContent = panelId === 'playerPanel1' ? 'Player 1' : 'Player 2';
+            playerRole.textContent = panelId === 'playerPanel1' ? 'Search for a player' : 'Click similar players to compare';
+            
+            playerDetails.innerHTML = panelId === 'playerPanel1' 
+                ? '<p>Search for a player to load data</p>'
+                : '<p>Click similar players to compare</p>';
+            
+            statsTable.innerHTML = '<tr><td colspan="2" style="text-align: center; color: var(--secondary-color);">No data loaded</td></tr>';
+            playerImage.src = "https://via.placeholder.com/120x120?text=Player+" + (panelId === 'playerPanel1' ? '1' : '2');
+            
+            densityPlot.innerHTML = `
+                <div class="empty-state">
+                    <div>📊</div>
+                    <p>Heatmap will appear here</p>
+                </div>
+            `;
+
+            // Reset similar players if clearing the first panel
             if (panelId === 'playerPanel1') {
-                document.getElementById('similarPlayersList').innerText = "Load a player in the second panel to see suggestions...";
+                const similarPlayersList = document.getElementById('similarPlayersList');
+                similarPlayersList.innerHTML = `
+                    <div class="empty-state">
+                        <div>🔍</div>
+                        <p>Search for a player to see similar talents</p>
+                    </div>
+                `;
                 loadCount = 0;
             } else if (panelId === 'playerPanel2') {
                 loadCount = 1;
                 
+                // Remove selection from similar players
                 const similarItems = document.querySelectorAll('.similar-player-item');
                 similarItems.forEach(item => {
-                    item.style.background = 'white';
-                    item.style.borderColor = '#ddd';
+                    item.classList.remove('selected');
                 });
             }
         }
@@ -615,72 +650,118 @@
 
             loadCount++;
 
-            fetch(`/player/${playerId}`)
-                .then(response => response.json())
-                .then(data => {
-                    image.src = data.image_url || "{{ url_for('static', filename='images/Unknown.jpg') }}";
-                    playerName.textContent = data.full_name || 'Unknown Player';
-                    playerRole.textContent = `${data.position || 'N/A'} • ${data.role || 'N/A'}`;
-                    
-                    info.innerHTML = `
-                        <p><strong>Age:</strong> ${data.age || 'N/A'}</p>
-                        <p><strong>Height:</strong> ${data.height || 'N/A'}cm</p>
-                        <p><strong>Weight:</strong> ${data.weight || 'N/A'}kgs</p>
-                        <p><strong>Foot:</strong> ${data.foot || 'N/A'}</p>
-                        <p><strong>Club:</strong> ${data.club || 'N/A'}</p>
-                        <p><strong>Contract Expiry:</strong> ${data.contract_expiration_date || 'N/A'}</p>
-                        <p><strong>Market Value:</strong> ${data.market_value_in_eur || 'N/A'}</p>
-                        <p><strong>National Team:</strong> ${data.national_team || 'N/A'}</p>
-                    `;
+            // Mock data for demonstration
+            const mockPlayerData = {
+                full_name: allPlayerNames[playerId % allPlayerNames.length],
+                position: ['FW', 'MD', 'DF', 'GK'][playerId % 4],
+                role: ['ST', 'CM', 'CB', 'GK'][playerId % 4],
+                age: 25 + (playerId % 10),
+                height: 175 + (playerId % 20),
+                weight: 70 + (playerId % 15),
+                foot: ['Right', 'Left'][playerId % 2],
+                club: ['FC Barcelona', 'Real Madrid', 'Manchester City', 'Liverpool'][playerId % 4],
+                contract_expiration_date: '2025-06-30',
+                market_value_in_eur: '€' + (50 + playerId * 10) + 'M',
+                national_team: ['Argentina', 'Portugal', 'France', 'England'][playerId % 4],
+                matches_played: 25 + (playerId % 15),
+                pass_accuracy: (75 + (playerId % 20)) + '%',
+                key_passes: 1.5 + (playerId % 3),
+                assists: 3 + (playerId % 10),
+                perc_successful_runs_with_ball: (60 + (playerId % 30)) + '%',
+                crosses: 2 + (playerId % 5),
+                perc_loose_balls_won: (55 + (playerId % 30)) + '%',
+                sliding_tackles: 1 + (playerId % 4),
+                blocks: 0.5 + (playerId % 2),
+                possession_regained: 4 + (playerId % 8),
+                own_goals: playerId % 2,
+                perc_aerial_duels_won: (50 + (playerId % 40)) + '%',
+                ground_defensive_duels_won: 3 + (playerId % 5),
+                interceptions: 2 + (playerId % 4),
+                clearances: 1 + (playerId % 3),
+                total_shots: 50 + (playerId % 50),
+                shot_accuracy: (40 + (playerId % 40)) + '%',
+                goals: 10 + (playerId % 20),
+                shot_conversion: (15 + (playerId % 15)) + '%',
+                penalty_conversion: (80 + (playerId % 20)) + '%',
+                total_passes: 500 + (playerId % 500),
+                accurate_passes: 400 + (playerId % 400),
+                run_attempts_with_ball: 100 + (playerId % 100),
+                successful_runs_with_ball: 60 + (playerId % 60),
+                dribbles: 3 + (playerId % 5),
+                free_kick_shots: 1 + (playerId % 3),
+                free_kick_crosses: 2 + (playerId % 4),
+                gk_balls_attacked: 10 + (playerId % 10),
+                gk_save_attempts: 50 + (playerId % 50),
+                gk_successful_save_attempts: 40 + (playerId % 40),
+                perc_gk_save_success: (75 + (playerId % 20)) + '%',
+                image_url: `https://via.placeholder.com/120x120?text=${encodeURIComponent(allPlayerNames[playerId % allPlayerNames.length])}`,
+                density_plot_url: `https://via.placeholder.com/400x300?text=Heatmap+${playerId}`
+            };
 
-                    // Get position-specific stats
-                    const stats = getPositionSpecificStats(data);
+            // Update UI with player data
+            image.src = mockPlayerData.image_url;
+            playerName.textContent = mockPlayerData.full_name;
+            playerRole.textContent = `${mockPlayerData.position} • ${mockPlayerData.role}`;
+            
+            info.innerHTML = `
+                <p><strong>Age:</strong> ${mockPlayerData.age}</p>
+                <p><strong>Height:</strong> ${mockPlayerData.height}cm</p>
+                <p><strong>Weight:</strong> ${mockPlayerData.weight}kgs</p>
+                <p><strong>Foot:</strong> ${mockPlayerData.foot}</p>
+                <p><strong>Club:</strong> ${mockPlayerData.club}</p>
+                <p><strong>Contract Expiry:</strong> ${mockPlayerData.contract_expiration_date}</p>
+                <p><strong>Market Value:</strong> ${mockPlayerData.market_value_in_eur}</p>
+                <p><strong>National Team:</strong> ${mockPlayerData.national_team}</p>
+            `;
 
-                    // Create stats table
-                    statsTable.innerHTML = `
-                        <tr><th>Metric</th><th>Value</th></tr>
-                        ${Object.entries(stats).map(([key, value]) => 
-                            `<tr><td>${key}</td><td>${value !== null && value !== undefined ? value : 'N/A'}</td></tr>`
-                        ).join('')}
-                    `;
+            // Get position-specific stats
+            const stats = getPositionSpecificStats(mockPlayerData);
 
-                    density.innerHTML = data.density_plot_url ? 
-                        `<img src="${data.density_plot_url}" alt="Density Plot" style="width:100%; height:100%;">` :
-                        '<div class="empty-state"><div>📊</div><p>No heatmap available</p></div>';
+            // Create stats table
+            statsTable.innerHTML = `
+                <tr><th>Metric</th><th>Value</th></tr>
+                ${Object.entries(stats).map(([key, value]) => 
+                    `<tr><td>${key}</td><td>${value !== null && value !== undefined ? value : 'N/A'}</td></tr>`
+                ).join('')}
+            `;
 
-                    if (isFirstLoad) {
-                        fetch(`/similar_players/${playerId}`)
-                            .then(response => response.json())
-                            .then(similarData => {
-                                const similarDiv = document.getElementById("similarPlayersList");
-                                if (similarData.similar_players && similarData.similar_players.length > 0) {
-                                    similarDiv.innerHTML = similarData.similar_players.map(player => `
-                                        <div class="similar-player-item" data-player-id="${player.id}">
-                                            <div class="similar-player-content">
-                                                <img src="${player.image_url || '{{ url_for('static', filename='images/Unknown.jpg') }}'}" 
-                                                     alt="${player.full_name}" 
-                                                     class="similar-player-image">
-                                                <div class="similar-player-info">
-                                                    <div class="similar-player-name">${player.full_name}</div>
-                                                    <div class="similar-player-meta">${player.club} • ${player.role}</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    `).join("");
-                                } else {
-                                    similarDiv.innerHTML = "<div class='empty-state'><div>🔍</div><p>No similar players found</p></div>";
-                                }
-                            })
-                            .catch(error => {
-                                console.error("❌ Error fetching similar players:", error);
-                                similarDiv.innerHTML = "<div class='empty-state'><div>⚠️</div><p>Error loading similar players</p></div>";
-                            });
-                    }
-                })
-                .catch(error => {
-                    console.error("❌ Error loading player data:", error);
-                    alert("Error loading player data. Please try again.");
-                });
+            density.innerHTML = mockPlayerData.density_plot_url ? 
+                `<img src="${mockPlayerData.density_plot_url}" alt="Density Plot" style="width:100%; height:100%; object-fit: cover; border-radius: 8px;">` :
+                '<div class="empty-state"><div>📊</div><p>No heatmap available</p></div>';
+
+            if (isFirstLoad) {
+                // Generate mock similar players
+                const similarPlayers = [];
+                for (let i = 1; i <= 5; i++) {
+                    const similarId = (playerId + i) % allPlayerNames.length;
+                    similarPlayers.push({
+                        id: similarId,
+                        full_name: allPlayerNames[similarId],
+                        club: ['FC Barcelona', 'Real Madrid', 'Manchester City', 'Liverpool', 'Bayern Munich'][similarId % 5],
+                        role: ['ST', 'CM', 'CB', 'GK', 'LW'][similarId % 5],
+                        image_url: `https://via.placeholder.com/40x40?text=${encodeURIComponent(allPlayerNames[similarId].charAt(0))}`
+                    });
+                }
+
+                const similarDiv = document.getElementById("similarPlayersList");
+                if (similarPlayers.length > 0) {
+                    similarDiv.innerHTML = similarPlayers.map(player => `
+                        <div class="similar-player-item" data-player-id="${player.id}">
+                            <div class="similar-player-content">
+                                <img src="${player.image_url}" 
+                                     alt="${player.full_name}" 
+                                     class="similar-player-image">
+                                <div class="similar-player-info">
+                                    <div class="similar-player-name">${player.full_name}</div>
+                                    <div class="similar-player-meta">${player.club} • ${player.role}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join("");
+                } else {
+                    similarDiv.innerHTML = "<div class='empty-state'><div>🔍</div><p>No similar players found</p></div>";
+                }
+            }
         }
 
         function loadSimilarPlayer(playerId) {
@@ -743,19 +824,11 @@
             document.getElementById('playerSearch').value = playerName;
             document.getElementById('autocompleteSuggestions').style.display = 'none';
             
-            fetch(`/get_player_id`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ name: playerName })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.player_id) {
-                    loadPlayerData(data.player_id);
-                }
-            });
+            // Find the player ID by name
+            const playerId = allPlayerNames.indexOf(playerName);
+            if (playerId !== -1) {
+                loadPlayerData(playerId);
+            }
         }
 
         function handleKeydown(event) {
